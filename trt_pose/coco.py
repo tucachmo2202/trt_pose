@@ -196,7 +196,7 @@ class CocoDataset(torch.utils.data.Dataset):
                  target_shape,
                  is_bmp=False,
                  stdev=0.02,
-                 use_crowd=False,
+                 use_crowd=True,
                  min_area=0.0,
                  max_area=1.0,
                  max_part_count=100,

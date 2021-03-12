@@ -10,8 +10,8 @@ import time
 import json
 import pprint
 import torch.nn.functional as F
-from .coco import CocoDataset, CocoHumanPoseEval
-from .models import MODELS
+from trt_pose.coco import CocoDataset, CocoHumanPoseEval
+from trt_pose.models import MODELS
 
 OPTIMIZERS = {
     'SGD': torch.optim.SGD,
