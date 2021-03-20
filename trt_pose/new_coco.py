@@ -233,18 +233,7 @@ class CocoDataset(torch.utils.data.Dataset):
                  max_area=1.0,
                  max_part_count=100,
                  random_angle=(0.0, 0.0),
-                 random_scale=(1.0, 1.0),def coco_annotations_to_mask_bbox(coco_annotations, image_shape):
-#     mask = np.ones(image_shape, dtype=np.uint8) # mask khởi tạo bằng mảng các giá trị 1
-#     #bbox của coco có định dạng [top left x position, top left y position, width, height]
-#     for ann in coco_annotations:
-#         if 'num_keypoints' not in ann or ann['num_keypoints'] == 0: #nếu không có keypoints nào thì mask của bbox đó thay bằng giá trị 0
-#             bbox = ann['bbox']
-#             x0 = round(bbox[0])
-#             y0 = round(bbox[1])
-#             x1 = round(x0 + bbox[2])
-#             y1 = round(y0 + bbox[3])
-#             mask[y0:y1, x0:x1] = 0
-#     return mask
+                 random_scale=(1.0, 1.0),
                  random_translate=(0.0, 0.0),
                  transforms=None,
                  keep_aspect_ratio=False): #tham số keep_aspect_ratio để chỉ rằng ảnh sẽ resize padding??
@@ -278,21 +267,7 @@ class CocoDataset(torch.utils.data.Dataset):
             data = json.load(f)
 
         cat = [c for c in data['categories'] if c['name'] == category_name][0]
-        cat_id = cat['id']
-
-''' 
-Thẻ images chứa các thông tin như trong ví dụ dưới đây: 
-    "images": [
-        {
-            "id": 0,
-            "license": 1,
-            "file_name": "0001.jpg",
-            "height": 275,
-            "width": 490,
-            "date_captured": "2020-07-20T19:39:26+00:00"
-        }
-    ],
-'''         
+        cat_id = cat['id']      
         samples = {}
         for ann in data['annotations']:
 
@@ -353,7 +328,7 @@ Thẻ images chứa các thông tin như trong ví dụ dưới đây:
             for j, ann in enumerate(sample['anns']):
                 image_shape = ann['bbox'][3], ann['bbox'][2]
                 new_ann = ann.deepcopy()
-                for i in range len(ann['keypoints']//3):
+                for i in range(len(ann['keypoints']//3)):
                     new_ann['keypoints'][3*i] -= new_ann['bbox'][0]
                     new_ann['keypoints'][3*i+1] -= new_ann['bbox'][1]
                 counts_i, peaks_i= coco_annotations_to_tensors([new_ann], image_shape, self.parts, self.topology)
