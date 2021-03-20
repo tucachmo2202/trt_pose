@@ -114,18 +114,18 @@ def coco_annotations_to_tensors(coco_annotations,
     return counts, peaks
 
 
-def coco_annotations_to_mask_bbox(coco_annotations, image_shape):
-    mask = np.ones(image_shape, dtype=np.uint8) # mask khởi tạo bằng mảng các giá trị 1
-    #bbox của coco có định dạng [top left x position, top left y position, width, height]
-    for ann in coco_annotations:
-        if 'num_keypoints' not in ann or ann['num_keypoints'] == 0: #nếu không có keypoints nào thì mask của bbox đó thay bằng giá trị 0
-            bbox = ann['bbox']
-            x0 = round(bbox[0])
-            y0 = round(bbox[1])
-            x1 = round(x0 + bbox[2])
-            y1 = round(y0 + bbox[3])
-            mask[y0:y1, x0:x1] = 0
-    return mask
+# def coco_annotations_to_mask_bbox(coco_annotations, image_shape):
+#     mask = np.ones(image_shape, dtype=np.uint8) # mask khởi tạo bằng mảng các giá trị 1
+#     #bbox của coco có định dạng [top left x position, top left y position, width, height]
+#     for ann in coco_annotations:
+#         if 'num_keypoints' not in ann or ann['num_keypoints'] == 0: #nếu không có keypoints nào thì mask của bbox đó thay bằng giá trị 0
+#             bbox = ann['bbox']
+#             x0 = round(bbox[0])
+#             y0 = round(bbox[1])
+#             x1 = round(x0 + bbox[2])
+#             y1 = round(y0 + bbox[3])
+#             mask[y0:y1, x0:x1] = 0
+#     return mask
             
 
 def convert_dir_to_bmp(output_dir, input_dir):
@@ -233,7 +233,18 @@ class CocoDataset(torch.utils.data.Dataset):
                  max_area=1.0,
                  max_part_count=100,
                  random_angle=(0.0, 0.0),
-                 random_scale=(1.0, 1.0),
+                 random_scale=(1.0, 1.0),def coco_annotations_to_mask_bbox(coco_annotations, image_shape):
+#     mask = np.ones(image_shape, dtype=np.uint8) # mask khởi tạo bằng mảng các giá trị 1
+#     #bbox của coco có định dạng [top left x position, top left y position, width, height]
+#     for ann in coco_annotations:
+#         if 'num_keypoints' not in ann or ann['num_keypoints'] == 0: #nếu không có keypoints nào thì mask của bbox đó thay bằng giá trị 0
+#             bbox = ann['bbox']
+#             x0 = round(bbox[0])
+#             y0 = round(bbox[1])
+#             x1 = round(x0 + bbox[2])
+#             y1 = round(y0 + bbox[3])
+#             mask[y0:y1, x0:x1] = 0
+#     return mask
                  random_translate=(0.0, 0.0),
                  transforms=None,
                  keep_aspect_ratio=False): #tham số keep_aspect_ratio để chỉ rằng ảnh sẽ resize padding??
@@ -269,9 +280,6 @@ class CocoDataset(torch.utils.data.Dataset):
         cat = [c for c in data['categories'] if c['name'] == category_name][0]
         cat_id = cat['id']
 
-        img_map = {}
-        for img in data['images']:
-            img_map[img['id']] = img
 ''' 
 Thẻ images chứa các thông tin như trong ví dụ dưới đây: 
     "images": [
@@ -289,26 +297,26 @@ Thẻ images chứa các thông tin như trong ví dụ dưới đây:
         for ann in data['annotations']:
 
             # filter by category
-
-            new_ann = ann.deepcopy()
-            new_ann['image']
-
             if ann['category_id'] != cat_id:
                 continue
 
             # filter by crowd
-            if not use_crowd and ann['iscrowd']:
+            # if not use_crowd and ann['iscrowd']:
+            #     continue
+
+            #loai bo anh k co keypoints
+            if 'num_keypoints' not in ann or ann['num_keypoints'] == 0:
                 continue
 
             img_id = ann['image_id']
             height = img['height']
             width = img['width']
-            area = ann['area']
+            # area = ann['area']
 
             # filter by object area
-            normalized_area = float(area) / float(height * width)
-            if normalized_area < min_area or normalized_area > max_area:
-                continue
+            # normalized_area = float(area) / float(height * width)
+            # if normalized_area < min_area or normalized_area > max_area:
+            #     continue
 
             # add metadata
             if img_id not in samples:
@@ -338,12 +346,21 @@ Thẻ images chứa các thông tin như trong ví dụ dưới đây:
         for i, sample in tqdm.tqdm(enumerate(samples.values())):
             filename = sample['img']['file_name']
             self.filenames.append(filename)
-            image_shape = (sample['img']['height'], sample['img']['width'])
-            counts_i, peaks_i= coco_annotations_to_tensors(
-                sample['anns'], image_shape, self.parts, self.topology)
-            self.counts[i] = counts_i
-            self.peaks[i] = peaks_i
-            # self.connections[i] = connections_i
+            # image_shape = (sample['img']['height'], sample['img']['width'])
+            # bbox của coco có định dạng [top left x position, top left y position, width, height]
+            count_array = []
+            peak_array = []
+            for j, ann in enumerate(sample['anns']):
+                image_shape = ann['bbox'][3], ann['bbox'][2]
+                new_ann = ann.deepcopy()
+                for i in range len(ann['keypoints']//3):
+                    new_ann['keypoints'][3*i] -= new_ann['bbox'][0]
+                    new_ann['keypoints'][3*i+1] -= new_ann['bbox'][1]
+                counts_i, peaks_i= coco_annotations_to_tensors([new_ann], image_shape, self.parts, self.topology)
+                count_array.append(counts_i)
+                peak_array.append(peaks_i)
+            self.counts[i] = count_array
+            self.peaks[i] = peak_array
             self.samples += [sample]
 
         if tensor_cache_file is not None:
@@ -370,58 +387,65 @@ Thẻ images chứa các thông tin như trong ví dụ dưới đây:
 
         image = PIL.Image.open(os.path.join(self.images_dir, filename))
         
-        im = self.samples[idx]['img']
-        
-        mask = coco_annotations_to_mask_bbox(self.samples[idx]['anns'], (im['height'], im['width']))
-        mask = PIL.Image.fromarray(mask)
-        
-        counts = self.counts[idx]
-        peaks = self.peaks[idx]
-        
-        # affine transformation
-        shiftx = float(torch.rand(1)) * (self.random_translate[1] - self.random_translate[0]) + self.random_translate[0]
-        shifty = float(torch.rand(1)) * (self.random_translate[1] - self.random_translate[0]) + self.random_translate[0]
-        scale = float(torch.rand(1)) * (self.random_scale[1] - self.random_scale[0]) + self.random_scale[0]
-        angle = float(torch.rand(1)) * (self.random_angle[1] - self.random_angle[0]) + self.random_angle[0]
-        
-        #
-        if self.keep_aspect_ratio:
-            ar = float(image.width) / float(image.height)
-            quad = get_quad(angle, (shiftx, shifty), scale, aspect_ratio=ar)
-        else:
-            quad = get_quad(angle, (shiftx, shifty), scale, aspect_ratio=1.0)
-        
-        image = transform_image(image, (self.image_shape[1], self.image_shape[0]), quad)
-        mask = transform_image(mask, (self.target_shape[1], self.target_shape[0]), quad)
-        peaks = transform_peaks(counts, peaks, quad)
-        
-        counts = counts[None, ...]
-        peaks = peaks[None, ...]
 
-        stdev = float(self.stdev * self.target_shape[0])
+        images = []
+        cmaps = []
+        masks = []
 
-        cmap = trt_pose.plugins.generate_cmap(counts, peaks,
-            self.target_shape[0], self.target_shape[1], stdev, int(stdev * 5))
-
-        # paf = trt_pose.plugins.generate_paf(
-        #     self.connections[idx][None, ...], self.topology,
-        #     counts, peaks,
-        #     self.target_shape[0], self.target_shape[1], stdev)
-
-        image = image.convert('RGB')
-        if self.transforms is not None:
-            image = self.transforms(image)
+        for j, ann in enumerate(self.samples[idx]['anns']):
+            image_shape = ann['bbox'][3], ann['bbox'][2]
+            new_ann = ann.deepcopy()
+            # for i in range len(ann['keypoints']//3):
+            #     new_ann['keypoints'][3*i] -= new_ann['bbox'][0]
+            #     new_ann['keypoints'][3*i+1] -= new_ann['bbox'][1]
             
-        return image, cmap[0], torch.from_numpy(np.array(mask))[None, ...]
+            im = self.samples[idx]['img']
+            sub_img = image.crop((ann['bbox'][0], ann['bbox'][1], ann['bbox'][0] + ann['bbox'][2], ann['bbox'][1] + ann['bbox'][3]))
+
+            # mask = coco_annotations_to_mask_bbox(self.samples[idx]['anns'], (im['height'], im['width']))
+            #Tao mask voi shape bang voi shape cua bbox
+            mask = np.ones(image_shape, dtype=np.uint8)
+            mask = PIL.Image.fromarray(mask)
+            
+            count = self.counts[idx][j]
+            peak = self.peaks[idx][j]
+
+            # affine transformation
+            shiftx = float(torch.rand(1)) * (self.random_translate[1] - self.random_translate[0]) + self.random_translate[0]
+            shifty = float(torch.rand(1)) * (self.random_translate[1] - self.random_translate[0]) + self.random_translate[0]
+            scale = float(torch.rand(1)) * (self.random_scale[1] - self.random_scale[0]) + self.random_scale[0]
+            angle = float(torch.rand(1)) * (self.random_angle[1] - self.random_angle[0]) + self.random_angle[0]
+            
+            if self.keep_aspect_ratio:
+                ar = float(sub_img.width) / float(sub_img.height)
+                quad = get_quad(angle, (shiftx, shifty), scale, aspect_ratio=ar)
+            else:
+                quad = get_quad(angle, (shiftx, shifty), scale, aspect_ratio=1.0)
+            
+            sub_img = transform_image(sub_img, (self.image_shape[1], self.image_shape[0]), quad)
+            mask = transform_image(mask, (self.target_shape[1], self.target_shape[0]), quad)
+            peak = transform_peaks(count, peak, quad)
+            
+            count = count[None, ...]
+            peak = peak[None, ...]
+
+            stdev = float(self.stdev * self.target_shape[0])
+
+            cmap = trt_pose.plugins.generate_cmap(counts, peaks,
+                self.target_shape[0], self.target_shape[1], stdev, int(stdev * 5))
+
+            sub_img = sub_img.convert('RGB')
+            if self.transforms is not None:
+                sub_img = self.transforms(sub_img)
+            
+            images.append(images)
+            cmaps.append(cmap)
+            masks.append(torch.from_numpy(np.array(mask))[None, ...])
+            
+        return images, cmaps, masks
 
     def get_part_type_counts(self):
         return torch.sum(self.counts, dim=0)
-    
-    # def get_paf_type_counts(self):
-    #     c = torch.sum(self.connections[:, :, 0, :] >= 0, dim=-1) # sum over parts
-    #     c = torch.sum(c, dim=0) # sum over batch
-    #     return c
-    
     
 class CocoHumanPoseEval(object):
     

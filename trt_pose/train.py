@@ -84,10 +84,10 @@ if __name__ == '__main__':
     part_type_counts = test_dataset.get_part_type_counts().float().cuda()
     part_weight = 1.0 / part_type_counts
     part_weight = part_weight / torch.sum(part_weight)
-    paf_type_counts = test_dataset.get_paf_type_counts().float().cuda()
-    paf_weight = 1.0 / paf_type_counts
-    paf_weight = paf_weight / torch.sum(paf_weight)
-    paf_weight /= 2.0
+    # paf_type_counts = test_dataset.get_paf_type_counts().float().cuda()
+    # paf_weight = 1.0 / paf_type_counts
+    # paf_weight = paf_weight / torch.sum(paf_weight)
+    # paf_weight /= 2.0
     
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -115,7 +115,6 @@ if __name__ == '__main__':
         mask_unlabeled = False
         
     for epoch in range(config["epochs"]):
-        
         if str(epoch) in config['stdev_schedule']:
             stdev = config['stdev_schedule'][str(epoch)]
             print('Adjusting stdev to %f' % stdev)
@@ -129,64 +128,60 @@ if __name__ == '__main__':
         
         if epoch % config['checkpoints']['interval'] == 0:
             save_checkpoint(model, checkpoint_dir, epoch)
-        
-           
-        
+                
         train_loss = 0.0
         model = model.train()
-        for image, cmap, paf, mask in tqdm.tqdm(iter(train_loader)):
-            image = image.to(device)
-            cmap = cmap.to(device)
-            paf = paf.to(device)
-            
-            if mask_unlabeled:
-                mask = mask.to(device).float()
-            else:
-                mask = torch.ones_like(mask).to(device).float()
-            
-            optimizer.zero_grad()
-            cmap_out, paf_out = model(image)
-            
-            cmap_mse = torch.mean(mask * (cmap_out - cmap)**2)
-            paf_mse = torch.mean(mask * (paf_out - paf)**2)
-            
-            loss = cmap_mse + paf_mse
-            
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-#             loss.backward()
-            optimizer.step()
-            train_loss += float(loss)
-            
-        train_loss /= len(train_loader)
+        number_of_train_instance = 0
+        for images, cmaps, masks in tqdm.tqdm(iter(train_loader)):
+            for i in range(len(images)):
+                number_of_instance += len(images)
+                image = images[i].to(device)
+                cmap = cmap[i].to(device)
+                
+                if mask_unlabeled:
+                    mask = masks[i].to(device).float()
+                else:
+                    mask = torch.ones_like(masks[i]).to(device).float()
+                
+                optimizer.zero_grad()
+                cmap_out = model(image)
+                
+                cmap_mse = torch.mean(mask * (cmap_out - cmap)**2)
+                
+                loss = cmap_mse
+                
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+                optimizer.step()
+                train_loss += float(loss)
+        
+        train_loss /= number_of_train_instance
         
         test_loss = 0.0
         model = model.eval()
-        for image, cmap, paf, mask in tqdm.tqdm(iter(test_loader)):
-      
-            with torch.no_grad():
-                image = image.to(device)
-                cmap = cmap.to(device)
-                paf = paf.to(device)
-                mask = mask.to(device).float()
+        number_of_val_instance = 0
+        for images, cmaps, masks in tqdm.tqdm(iter(test_loader)):
+            for j in len(images):
+                with torch.no_grad():
+                    image = images[i].to(device)
+                    cmap = cmaps[i].to(device)
+                    mask = masks[i].to(device).float()
 
-                if mask_unlabeled:
-                    mask = mask.to(device).float()
-                else:
-                    mask = torch.ones_like(mask).to(device).float()
-                
-                cmap_out, paf_out = model(image)
-                
-                cmap_mse = torch.mean(mask * (cmap_out - cmap)**2)
-                paf_mse = torch.mean(mask * (paf_out - paf)**2)
+                    if mask_unlabeled:
+                        mask = masks[i].to(device).float()
+                    else:
+                        mask = torch.ones_like(masks[i]).to(device).float()
+                    
+                    cmap_out = model(image)
+                    
+                    cmap_mse = torch.mean(mask * (cmap_out - cmap)**2)
 
-                loss = cmap_mse + paf_mse
+                    loss = cmap_mse
 
-                test_loss += float(loss)
-        test_loss /= len(test_loader)
+                    test_loss += float(loss)
+        test_loss /= number_of_val_instance
         
         write_log_entry(logfile_path, epoch, train_loss, test_loss)
-        
         
         if 'evaluation' in config:
             evaluator.evaluate(model, train_dataset.topology)

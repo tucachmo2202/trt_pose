@@ -1,4 +1,6 @@
 #include "find_peaks.hpp"
+// #include <omp.h>
+
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -30,14 +32,15 @@ void find_peaks_out_hw(int *counts,        // 1
 
       // search for larger value in window
       bool is_peak = true;
-      for (int ii = ii_min; ii < ii_max; ii++) {
-        for (int jj = jj_min; jj < jj_max; jj++) {
-          if (input[ii * W + jj] > val) {
-            is_peak = false;
+      // #pragma omp parallel shared(is_peak){
+        for (int ii = ii_min; ii < ii_max; ii++) {
+          for (int jj = jj_min; jj < jj_max; jj++) {
+            if (input[ii * W + jj] > val) {
+              is_peak = false;
+            }
           }
         }
-      }
-
+      // }
       // add peak
       if (is_peak) {
         peaks[count * 2] = i;
